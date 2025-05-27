@@ -1,0 +1,11 @@
+{
+  "base_url": "https://do312.com/festivals",
+  "event_selector": "div.ds-listing",
+  "fields": {
+    "title": { "selector": "span.ds-listing-event-title-text", "attr": null },
+    "start_date": { "selector": "meta[itemprop='startDate']", "attr": "content" },
+    "location": { "selector": "div.ds-venue-name", "attr": null },
+    "link": { "selector": "a.ds-listing-event-title.url.summary", "attr": "href" }
+  },
+  "pagination": true
+}
