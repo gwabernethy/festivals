@@ -1,0 +1,85 @@
+import csv
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import time
+import json
+
+HEADERS = {'User-Agent': 'Mozilla/5.0'}
+
+# Load config from external file
+def load_config(filename='FestivalScraper_config.json'):
+    with open(filename, 'r') as f:
+        return json.load(f)
+
+def get_soup(url):
+    response = requests.get(url, headers=HEADERS)
+    response.raise_for_status()
+    return BeautifulSoup(response.text, 'html.parser')
+
+def extract_text(element, attr):
+    if not element:
+        return ''
+    if attr:
+        return element.get(attr, '').strip()
+    return element.text.strip()
+
+def parse_event_details(event, config):
+    title = extract_text(event.select_one(config['fields']['title']['selector']), config['fields']['title']['attr']) or 'Untitled Event'
+    start_date_raw = extract_text(event.select_one(config['fields']['start_date']['selector']), config['fields']['start_date']['attr'])
+    venue = extract_text(event.select_one(config['fields']['location']['selector']), config['fields']['location']['attr']) or 'Chicago'
+    link_path = extract_text(event.select_one(config['fields']['link']['selector']), config['fields']['link']['attr'])
+    link = f"https://do312.com{link_path}" if link_path else ''
+
+    start_date, start_time, end_date, end_time = '', '', '', ''
+    if start_date_raw:
+        try:
+            dt = datetime.fromisoformat(start_date_raw)
+            start_date = dt.strftime('%m/%d/%Y')
+            start_time = dt.strftime('%I:%M %p')
+            end_date = start_date
+        except ValueError:
+            pass
+
+    return [
+        title,
+        start_date,
+        start_time,
+        end_date,
+        end_time,
+        'False' if start_time else 'True',
+        link,
+        venue,
+        'True'
+    ]
+
+def scrape_events(config):
+    all_events = []
+    page = 1
+    while True:
+        url = f"{config['base_url']}?page={page}" if config['pagination'] else config['base_url']
+        soup = get_soup(url)
+        events = soup.select(config['event_selector'])
+        if not events:
+            break
+        for event in events:
+            all_events.append(parse_event_details(event, config))
+        if not config['pagination']:
+            break
+        page += 1
+        time.sleep(1)  # Be polite to the server
+
+    return all_events
+
+def save_to_csv(events, filename='events.csv'):
+    headers = ['Subject', 'Start Date', 'Start Time', 'End Date', 'End Time', 'All Day Event', 'Description', 'Location', 'Private']
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerows(events)
+
+if __name__ == '__main__':
+    config = load_config('config.json')
+    events = scrape_events(config)
+    save_to_csv(events)
+    print(f"Scraped and saved {len(events)} events to 'events.csv'")
